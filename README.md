@@ -1,1 +1,2 @@
-# Master-Micro-Internship-Task
+# Function Plotter
+## Master Micro Internship Task
