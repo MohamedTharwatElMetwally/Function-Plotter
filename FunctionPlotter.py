@@ -4,6 +4,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
+from fractions import Fraction
 import numpy as np
 import random
 import sys
@@ -13,12 +14,22 @@ import re
 
 
 
+def Calculate_Y(equation:str, x:int):
+    
+    # Define Function
+    def equation_function(x):
+        return eval(equation.replace(' ', '').replace('X', 'x').replace('^', '**'))
+    
+    return equation_function(x)
+
+
+
 
 def FunctionGraph(figure, equation:str, Xmin:int, Xmax:int, num_samples:int =100000):
     
     # Define Function
     def equation_function(x):
-        return eval(equation.replace('^', '**'))
+        return eval(equation.replace(' ', '').replace('X', 'x').replace('^', '**'))
     
     # Create x and y Ranges
     x = np.linspace(Xmin, Xmax, num_samples)
@@ -44,6 +55,63 @@ def FunctionGraph(figure, equation:str, Xmin:int, Xmax:int, num_samples:int =100
 
 
 
+
+class ValidationCriteria:
+
+    def validate_equation(self, Function: str):
+        equation = Function.replace('X', 'x').replace(' ', '')
+        supported_operators = 'x+-/*^0123456789'
+
+        if len(equation)==0:
+            return 'empty'
+        else:
+            
+            for char in equation:
+                if char not in supported_operators:
+                    return 'invalid syntax'
+
+            try:
+                def equation_function(x):
+                    return eval(equation.replace('^', '**'))
+                equation_function(1)
+            except Exception as e:
+                return 'invalid syntax'
+            
+            return equation
+
+            
+    def to_integer(self, num: str):
+        try:
+            fraction_obj = Fraction(num)
+
+            # Extract the numerator and denominator from the Fraction object
+            numerator = fraction_obj.numerator
+            denominator = fraction_obj.denominator
+
+            # Convert the fraction to an integer
+            integer_value = numerator // denominator
+            return integer_value
+    
+        except Exception as e:
+            return 'invalid syntax'
+    
+
+    def validate_number(self, num: str):
+
+        if len(num) == 0:
+            return 'empty'
+        else:
+            return self.to_integer(num)
+
+    
+    def validate_range(self, Xmin: int, Xmax: int):
+        if Xmin > Xmax:
+            return 0
+        else:
+            return 1
+
+
+
 class MainWindow(QWidget):
     
     def __init__(self):
@@ -55,15 +123,10 @@ class MainWindow(QWidget):
         self.setStyleSheet("font: 11pt \"Calibri (body)\";")
         self.setEnabled(True)
         self.setMinimumSize(QtCore.QSize(1500, 875))
-
-
-
-class UserInterface(object):
-     
-    def __init__(self, MainWindow):
-
+    
+        # Create Central Widget for Main Window
         self.CentralWidget = QWidget()
-        self.CentralWidget.setParent(MainWindow)  # OR  # MainWindow.setCentralWidget(self.CentralWidget)
+        self.CentralWidget.setParent(self)  # OR  # MainWindow.setCentralWidget(self.CentralWidget)
         self.CentralWidget.setObjectName('Central Widget')
         
         # Equation -> Label & TextBox 
@@ -110,7 +173,7 @@ class UserInterface(object):
         self.plot_button.setObjectName('Plot Button')
 
         # Exit Button
-        self.exit_button = QPushButton(self.CentralWidget,clicked=lambda: MainWindow.close())
+        self.exit_button = QPushButton(self.CentralWidget,clicked=lambda: self.close())
         self.exit_button.setGeometry(QtCore.QRect(1240, 450, 120, 35))
         self.exit_button.setStyleSheet("font: 20pt \"Calibri (body)\";")
         self.exit_button.setText('Exit')
@@ -131,50 +194,13 @@ class UserInterface(object):
 		# it takes the Canvas widget and a parent
         self.toolbar = NavigationToolbar(self.canvas, self.CentralWidget)
 
+        # Keep Track The Times of Changes
+        self.update_times = 0
 
-    def validate_equation(self):
-
-        equation = self.equation.text().replace('X', 'x').replace(' ', '')
-        supported_operators = 'x+-/*^0123456789'
-
-        if len(equation)==0:
-            return 'empty'
-        else:
-
-            for char in equation:
-                if char not in supported_operators:
-                    return 'invalid syntax'
-            
-            try:
-                def equation_function(x):
-                    return eval(equation.replace('^', '**'))
-                equation_function(1)
-            except Exception as e:
-                return 'invalid syntax'
-            
-            return equation
     
-     # def validate_equation(self):
-
-    #     equation = self.equation.text().replace('X', 'x').replace(' ', '')
-    #     if len(equation)==0:
-    #         return 'empty'
-    #     else:
-    #         equation_pattern = "(-)?(\d+$)|((-)?(\d+[+-])?(\d+[\*\/])?[xX](\^\d+)?([+-](\d+)?([\*\/][xX](\^\d+)?)?)*)*$"
-    #         match = re.match(equation_pattern, equation)
-    #         if not match:
-    #             return 'invalid syntax'
-    #         return equation
-            
-    def to_integer(self, num: int):
-        try:
-            int(num)
-            return 1
-        except Exception as e:
-            return 0
-        
     def error_message(self, message: str):
         QMessageBox.about(self.CentralWidget, 'Error', message)
+
 
     def update_plot(self):
 
@@ -182,8 +208,10 @@ class UserInterface(object):
             # clearing old figure
             self.figure.clear()
             
+            validation = ValidationCriteria()
+
             # validate equation
-            val_equation = self.validate_equation()
+            val_equation = validation.validate_equation(self.equation.text())
             if val_equation == 'empty':
                 self.error_message('Functon Field Is Empty')
                 return
@@ -192,39 +220,43 @@ class UserInterface(object):
                 return
             
             # validate Xmin 
-            Xmin = self.Xmin.text()
-            if len(Xmin) == 0:
+            val_Xmin = validation.validate_number(self.Xmin.text())
+            if val_Xmin == 'empty':
                 self.error_message('Xmin Field Is Empty')
                 return
-            elif self.to_integer(Xmin) == 0:
+            elif val_Xmin == 'invalid syntax':
                 self.error_message('Invalid Value For Xmin, Only Numerical Values Are Allowed')
                 return
 
             # validate Xmax
-            Xmax = self.Xmax.text()
-            if len(Xmax) == 0:
+            val_Xmax = validation.validate_number(self.Xmax.text())
+            if val_Xmax == 'empty':
                 self.error_message('Xmax Field Is Empty')
                 return
-            elif self.to_integer(Xmax) == 0:
+            elif val_Xmax == 'invalid syntax':
                 self.error_message('Invalid Value For Xmax, Only Numerical Values Are Allowed')
                 return
             
             # validate range 
-            if int(Xmin) > int(Xmax):
+            val_range = validation.validate_range(val_Xmin, val_Xmax)
+            if val_range == 0:
                 self.error_message('Invalid Range, Xmin Must Be Lower Than Or Equal To Xmax')
                 return
 
             # plot new figure
-            FunctionGraph(self.figure, val_equation, int(Xmin), int(Xmax))
+            FunctionGraph(self.figure, val_equation, val_Xmin, val_Xmax)
 
             # refresh canvas
             self.canvas.draw()
+
+            self.update_times += 1
 
         except Exception as e:
             self.error_message(e)
             return
         
-        
+
+
 
 if __name__ == "__main__":
 
@@ -236,9 +268,6 @@ if __name__ == "__main__":
 
     # create main window
     mainwindow = MainWindow()
-
-    # create GUI for main window
-    UI = UserInterface(mainwindow)
 
     # invoke show function
     mainwindow.show()
